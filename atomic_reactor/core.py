@@ -242,13 +242,28 @@ class DockerTasker(LastLogger):
         :return: generator
         """
         logger.info("building image '%s' from path '%s'", image, path)
+
+        container_limits = {
+            # Limit CPU usage to the default shares
+            'cpushares': 1024,
+        }
+
+        kwargs = {
+            'path': path,
+            'tag': image.to_str(),
+            'stream': stream,
+            'nocache': not use_cache,
+            'rm': remove_im,
+            'pull': False,
+            'container_limits': container_limits,
+        }
         try:
-            response = self.d.build(path=path, tag=image.to_str(), stream=stream, nocache=not use_cache,
-                                    rm=remove_im, pull=False)  # returns generator
+            response = self.d.build(**kwargs)  # returns generator
         except TypeError:
             # because changing api is fun
-            response = self.d.build(path=path, tag=image.to_str(), stream=stream, nocache=not use_cache,
-                                    rm=remove_im)  # returns generator
+            del kwargs['path']
+            response = self.d.build(**kwargs)  # returns generator
+
         return response
 
     def build_image_from_git(self, url, image, git_path=None, git_commit=None, copy_dockerfile_to=None,
