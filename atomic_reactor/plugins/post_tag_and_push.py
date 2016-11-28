@@ -37,6 +37,8 @@ class TagAndPushPlugin(PostBuildPlugin):
                               plain HTTP.
                             * "secret" optional string - path to the secret, which stores
                               email, login and password for remote registry
+                            * "scheme" optional string - scheme to be used for accessing
+                              registry - defaults to https://
         """
         # call parent constructor
         super(TagAndPushPlugin, self).__init__(tasker, workflow)
@@ -53,6 +55,7 @@ class TagAndPushPlugin(PostBuildPlugin):
         first_registry_image = None
         for registry, registry_conf in self.registries.items():
             insecure = registry_conf.get('insecure', False)
+            registry_uri = registry_conf.get('scheme', 'https://') + registry
             push_conf_registry = \
                 self.workflow.push_conf.add_docker_registry(registry, insecure=insecure)
 
@@ -72,7 +75,7 @@ class TagAndPushPlugin(PostBuildPlugin):
                 pushed_images.append(registry_image)
                 defer_removal(self.workflow, registry_image)
 
-                digests = get_manifest_digests(registry_image, registry,
+                digests = get_manifest_digests(registry_image, registry_uri,
                                                insecure, docker_push_secret)
                 tag = registry_image.to_str(registry=False)
                 push_conf_registry.digests[tag] = digests
@@ -83,7 +86,7 @@ class TagAndPushPlugin(PostBuildPlugin):
 
             if first_v2_digest:
                 push_conf_registry.config = get_config_from_registry(
-                    first_registry_image, registry, first_v2_digest, insecure,
+                    first_registry_image, registry_uri, first_v2_digest, insecure,
                     docker_push_secret, 'v2')
             else:
                 self.log.info("V2 schema 2 digest is not available")
