@@ -606,6 +606,7 @@ def test_plugin_errors(request, plugins, should_fail, should_log):
         workflow.build_docker_image()
         assert watcher.was_called()
         assert not workflow.plugins_errors
+        assert not workflow.plugin_failed
 
     if should_log:
         assert len(fake_logger.errors) > 0
