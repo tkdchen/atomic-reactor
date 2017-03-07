@@ -402,12 +402,13 @@ class DockerTasker(LastLogger):
         logger.debug("%d matching images found", len(images))
         return images
 
-    def pull_image(self, image, insecure=False):
+    def pull_image(self, image, insecure=False, only_if_newer=False):
         """
         pull provided image from registry
 
         :param image_name: ImageName, image to pull
         :param insecure: bool, allow connecting to registry over plain http
+        :param only_if_newer: bool, if image was already present return None
         :return: str, image (reg.om/img:v1)
         """
         logger.info("pulling image '%s' from registry", image)
@@ -419,6 +420,17 @@ class DockerTasker(LastLogger):
             logs_gen = self.d.pull(image.to_str(tag=False), tag=image.tag, stream=True)
         command_result = wait_for_command(logs_gen)
         self.last_logs = command_result.logs
+
+        if only_if_newer:
+            for msg in reversed(command_result.parsed_logs):
+                status = msg.get('status')
+                if status is not None:
+                    if 'Image is up to date' in status:
+                        return None
+
+                    # Only consider the final status
+                    break
+
         return image.to_str()
 
     def tag_image(self, image, target_image, force=False):

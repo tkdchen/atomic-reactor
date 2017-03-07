@@ -234,6 +234,23 @@ def test_pull_image():
     t.remove_image(remote_img)
 
 
+def test_pull_image_if_newer():
+    if MOCK:
+        mock_docker()
+
+    pull_logs = [
+        b'{"status":"Trying to pull repository localhost:5000/busybox ... "}',
+        b'{"status":"Pulling from localhost:5000/busybox","id":"sha256:28be0609f90ef53e86e1872a11d672434ce1361711760cf1fe059efd222f8d37"}',
+        b'{"status":"Digest: sha256:28be0609f90ef53e86e1872a11d672434ce1361711760cf1fe059efd222f8d37"}',
+        b'{"status":"Status: Image is up to date for localhost:5000/busybox"}'
+    ]
+
+    flexmock(docker.Client, pull=lambda *args, **kwargs: iter(pull_logs))
+    t = DockerTasker()
+    image = ImageName.parse('localhost:5000/busybox')
+    assert t.pull_image(image, only_if_newer=True) == None
+
+
 def test_get_image_info_by_id_nonexistent():
     if MOCK:
         mock_docker()

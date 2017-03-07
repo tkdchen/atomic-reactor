@@ -59,16 +59,22 @@ class PullBaseImagePlugin(PreBuildPlugin):
             base_image_with_registry.registry = self.parent_registry
 
         pulled_base = self.tasker.pull_image(base_image_with_registry,
-                                             insecure=self.parent_registry_insecure)
+                                             insecure=self.parent_registry_insecure,
+                                             only_if_newer=True)
         if (base_image_with_registry.namespace != 'library' and
                 not self.tasker.image_exists(base_image_with_registry.to_str())):
             self.log.info("'%s' not found", base_image_with_registry.to_str())
             base_image_with_registry.namespace = 'library'
             self.log.info("trying '%s'", base_image_with_registry.to_str())
             pulled_base = self.tasker.pull_image(base_image_with_registry,
-                                                 insecure=self.parent_registry_insecure)
+                                                 insecure=self.parent_registry_insecure,
+                                                 only_if_newer=True)
 
-        self.workflow.pulled_base_images.add(pulled_base)
+        if pulled_base:
+            self.workflow.pulled_base_images.add(pulled_base)
+        else:
+            pulled_base = base_image_with_registry.to_str()
+            self.log.debug("image '%s' was already up to date", pulled_base)
 
         if not base_image.registry:
             response = self.tasker.tag_image(base_image_with_registry, base_image, force=True)

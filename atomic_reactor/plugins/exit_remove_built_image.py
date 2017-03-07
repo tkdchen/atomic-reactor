@@ -41,24 +41,23 @@ class GarbageCollectionPlugin(ExitPlugin):
     def run(self):
         image = self.workflow.builder.image_id
         if image:
-            self.remove_image(image, force=True)
+            self.remove_image(image)
         else:
             self.log.error("no built image, nothing to remove")
 
         if self.remove_base_image and self.workflow.pulled_base_images:
-            # FIXME: we may need to add force here, let's try it like this for now
             # FIXME: when ID of pulled img matches an ID of an image already present, don't remove
             for base_image_tag in self.workflow.pulled_base_images:
-                self.remove_image(base_image_tag, force=False)
+                self.remove_image(base_image_tag)
 
         workspace = self.workflow.plugin_workspace.get(self.key, {})
         images_to_remove = workspace.get('images_to_remove', [])
         for image in images_to_remove:
-            self.remove_image(image, force=True)
+            self.remove_image(image)
 
-    def remove_image(self, image, force=False):
+    def remove_image(self, image):
         try:
-            self.tasker.remove_image(image, force=force)
+            self.tasker.remove_image(image)
         except APIError as ex:
             if ex.is_client_error():
                 self.log.warning("failed to remove image %s (%s: %s), ignoring",
