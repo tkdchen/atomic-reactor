@@ -437,6 +437,10 @@ def build_inside(input_method, input_args=None, substitutions=None):
             processed_keyvals[key] = value
         return processed_keyvals
 
+    main = __name__.split('.', 1)[0]
+    log_encoding = logging.getLogger(main).handlers[0].stream.encoding
+    logger.info("log encoding: %s", log_encoding)
+
     if not input_method:
         raise RuntimeError("No input method specified!")
     else:
