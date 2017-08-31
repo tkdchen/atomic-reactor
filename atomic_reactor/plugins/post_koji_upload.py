@@ -79,7 +79,8 @@ class KojiUploadPlugin(PostBuildPlugin):
                  koji_upload_dir, verify_ssl=True, use_auth=True,
                  koji_ssl_certs_dir=None, koji_proxy_user=None,
                  koji_principal=None, koji_keytab=None,
-                 blocksize=None, prefer_schema1_digest=True):
+                 blocksize=None, prefer_schema1_digest=True,
+                 buildstep_logs=None):
         """
         constructor
 
@@ -98,6 +99,8 @@ class KojiUploadPlugin(PostBuildPlugin):
         :param blocksize: int, blocksize to use for uploading files
         :param prefer_schema1_digest: bool, when True, v2 schema 1 digest will
             be preferred as the built image digest
+        :param buildstep_logs: str, filename to use for buildstep logs; when
+            this is not None, server logs will not be uploaded
         """
         super(KojiUploadPlugin, self).__init__(tasker, workflow)
 
@@ -121,6 +124,7 @@ class KojiUploadPlugin(PostBuildPlugin):
         self.osbs = OSBS(osbs_conf, osbs_conf)
         self.build_id = None
         self.pullspec_image = None
+        self.buildstep_logs = buildstep_logs
 
     @staticmethod
     def parse_rpm_output(output, tags, separator=';'):
@@ -317,34 +321,42 @@ class KojiUploadPlugin(PostBuildPlugin):
 
         output = []
 
-        # Collect logs from server
-        try:
-            logs = self.osbs.get_build_logs(self.build_id)
-        except OsbsException as ex:
-            self.log.error("unable to get build logs: %r", ex)
-        else:
-            # Deleted once closed
-            logfile = NamedTemporaryFile(prefix=self.build_id,
-                                         suffix=".log",
-                                         mode='wb')
-            try:
-                logfile.write(logs)
-            except (TypeError, UnicodeEncodeError):
-                # Older osbs-client versions returned Unicode objects
-                logfile.write(logs.encode('utf-8'))
-            logfile.flush()
-            metadata = self.get_output_metadata(logfile.name,
-                                                "openshift-final.log")
-            output.append(Output(file=logfile, metadata=metadata))
+        if self.buildstep_logs is None:
+            # When no buildstep_logs parameter was set, we are the
+            # only worker build and are responsible for uploading
+            # server logs.
+            buildstep_logs = 'build.log'
 
-        docker_logs = NamedTemporaryFile(prefix="docker-%s" % self.build_id,
+            # Collect logs from server
+            try:
+                logs = self.osbs.get_build_logs(self.build_id)
+            except OsbsException as ex:
+                self.log.error("unable to get build logs: %r", ex)
+            else:
+                # Deleted once closed
+                logfile = NamedTemporaryFile(prefix=self.build_id,
+                                             suffix=".log",
+                                             mode='wb')
+                try:
+                    logfile.write(logs)
+                except (TypeError, UnicodeEncodeError):
+                    # Older osbs-client versions returned Unicode objects
+                    logfile.write(logs.encode('utf-8'))
+                logfile.flush()
+                metadata = self.get_output_metadata(logfile.name,
+                                                    "openshift-final.log")
+                output.append(Output(file=logfile, metadata=metadata))
+        else:
+            buildstep_logs = self.buildstep_logs
+
+        build_logs = NamedTemporaryFile(prefix="buildstep-%s" % self.build_id,
                                          suffix=".log",
                                          mode='wb')
-        docker_logs.write("\n".join(self.workflow.build_result.logs).encode('utf-8'))
-        docker_logs.flush()
-        output.append(Output(file=docker_logs,
-                             metadata=self.get_output_metadata(docker_logs.name,
-                                                               "build.log")))
+        build_logs.write("\n".join(self.workflow.build_result.logs).encode('utf-8'))
+        build_logs.flush()
+        output.append(Output(file=build_logs,
+                             metadata=self.get_output_metadata(build_logs.name,
+                                                               buildstep_logs)))
         return output
 
     def get_image_components(self):
