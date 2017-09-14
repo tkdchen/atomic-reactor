@@ -195,6 +195,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.config_kwargs = config_kwargs or {}
         self.unreachable_cluster_retry_count = unreachable_cluster_retry_count
         self.unreachable_cluster_retry_delay = unreachable_cluster_retry_delay
+        self.koji_upload_dir = self.get_koji_upload_dir()
 
         if worker_build_image:
             self.log.warning('worker_build_image is deprecated, use config_kwargs instead')
@@ -409,7 +410,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             clusters = self.get_clusters(platform)
             for cluster in clusters:
                 try:
-                    self.do_worker_build(release, cluster, self.get_koji_upload_dir(), task_id)
+                    self.do_worker_build(release, cluster, self.koji_upload_dir, task_id)
                     return
                 except:
                     continue
@@ -418,7 +419,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
 
     def run(self):
         platforms = self.get_platforms()
-        koji_upload_dir = self.get_koji_upload_dir()
+        koji_upload_dir = self.koji_upload_dir
 
         thread_pool = ThreadPool(len(platforms))
         result = thread_pool.map_async(self.select_and_start_cluster, platforms)
