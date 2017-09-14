@@ -245,7 +245,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                        cluster.name, platform, load, current_builds, cluster.max_concurrent_builds)
         return ClusterInfo(cluster, platform, osbs, load)
 
-    def choose_cluster(self, platform):
+    def get_clusters(self, platform):
+        ''' yield clusters by load '''
         config = get_config(self.workflow)
         clusters = [self.get_cluster_info(cluster, platform) for cluster in
                     config.get_enabled_clusters_for_platform(platform)]
@@ -261,10 +262,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             raise RuntimeError('All clusters for platform {} are unreachable!'
                                .format(platform))
 
-        selected = min(reachable_clusters, key=lambda c: c.load)
-        self.log.info('platform %s will use cluster %s',
-                      platform, selected.cluster.name)
-        return selected
+        reachable_clusters = sorted(reachable_clusters, key=lambda c: c.load)
+        return iter(reachable_clusters)
 
     def get_release(self):
         labels = df_parser(self.workflow.builder.df_path, workflow=self.workflow).labels
@@ -367,6 +366,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         except Exception:
             self.log.exception('%s - failed to create worker build',
                                cluster_info.platform)
+            raise
 
         build_info = WorkerBuildInfo(build=build, cluster_info=cluster_info, logger=self.log)
         self.worker_builds.append(build_info)
@@ -388,19 +388,33 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     build_info.cancel_build()
                 except OsbsException:
                     pass
+                finally:
+                    raise
 
-    def run(self):
+    def select_and_start_cluster(self, platform):
+        ''' Choose a cluster and start a build on it '''
         release = self.get_release()
-        platforms = self.get_platforms()
         koji_upload_dir = self.get_koji_upload_dir()
         task_id = self.get_fs_task_id()
 
+        retries = 0
+        while retries < self.unreachable_cluster_retry_count:
+            clusters = self.get_clusters(platform)
+            for cluster in clusters:
+                try:
+                    self.do_worker_build(release, cluster, koji_upload_dir, task_id)
+                    return
+                except:
+                    continue
+            time.sleep(self.unreachable_cluster_retry_delay)
+            retries += 1
+
+    def run(self):
+        platforms = self.get_platforms()
+        koji_upload_dir = self.get_koji_upload_dir()
+
         thread_pool = ThreadPool(len(platforms))
-        result = thread_pool.map_async(
-            lambda cluster_info: self.do_worker_build(release, cluster_info,
-                                                      koji_upload_dir, task_id),
-            [self.choose_cluster(platform) for platform in platforms]
-        )
+        result = thread_pool.map_async(self.select_and_start_cluster, platforms)
 
         try:
             while not result.ready():
