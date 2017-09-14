@@ -35,6 +35,8 @@ ClusterInfo = namedtuple('ClusterInfo', ('cluster', 'platform', 'osbs', 'load'))
 WORKSPACE_KEY_BUILD_INFO = 'build_info'
 WORKSPACE_KEY_UPLOAD_DIR = 'koji_upload_dir'
 WORKSPACE_KEY_OVERRIDE_KWARGS = 'override_kwargs'
+UNREACHABLE_CLUSTER_RETRY_DELAY = 30
+UNREACHABLE_CLUSTER_RETRY_COUNT = 10
 
 
 def get_worker_build_info(workflow, platform):
@@ -171,7 +173,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
 
     def __init__(self, tasker, workflow, platforms, build_kwargs,
                  osbs_client_config=None, worker_build_image=None,
-                 config_kwargs=None):
+                 config_kwargs=None,
+                 unreachable_cluster_retry_delay=UNREACHABLE_CLUSTER_RETRY_DELAY,
+                 unreachable_cluster_retry_count=UNREACHABLE_CLUSTER_RETRY_COUNT):
         """
         constructor
 
@@ -189,6 +193,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.build_kwargs = build_kwargs
         self.osbs_client_config = osbs_client_config
         self.config_kwargs = config_kwargs or {}
+        self.unreachable_cluster_retry_count = unreachable_cluster_retry_count
+        self.unreachable_cluster_retry_delay = unreachable_cluster_retry_delay
 
         if worker_build_image:
             self.log.warning('worker_build_image is deprecated, use config_kwargs instead')
@@ -219,7 +225,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
     def get_current_builds(self, osbs):
         field_selector = ','.join(['status!={status}'.format(status=status.capitalize())
                                    for status in BUILD_FINISHED_STATES])
-        return len(osbs.list_builds(field_selector=field_selector))
+        with osbs.retries_disabled():
+            return len(osbs.list_builds(field_selector=field_selector))
 
     def get_cluster_info(self, cluster, platform):
         kwargs = deepcopy(self.config_kwargs)
@@ -362,7 +369,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             kwargs = self.get_worker_build_kwargs(release, cluster_info.platform,
                                                   koji_upload_dir, task_id)
             kwargs.update(override_kwargs)
-            build = cluster_info.osbs.create_worker_build(**kwargs)
+            with cluster_info.osbs.retries_disabled():
+                build = cluster_info.osbs.create_worker_build(**kwargs)
         except Exception:
             self.log.exception('%s - failed to create worker build',
                                cluster_info.platform)
