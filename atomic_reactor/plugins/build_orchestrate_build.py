@@ -402,7 +402,6 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
     def select_and_start_cluster(self, platform):
         ''' Choose a cluster and start a build on it '''
         release = self.get_release()
-        koji_upload_dir = self.get_koji_upload_dir()
         task_id = self.get_fs_task_id()
 
         retries = 0
@@ -410,7 +409,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             clusters = self.get_clusters(platform)
             for cluster in clusters:
                 try:
-                    self.do_worker_build(release, cluster, koji_upload_dir, task_id)
+                    self.do_worker_build(release, cluster, self.get_koji_upload_dir(), task_id)
                     return
                 except:
                     continue
