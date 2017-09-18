@@ -35,8 +35,8 @@ ClusterInfo = namedtuple('ClusterInfo', ('cluster', 'platform', 'osbs', 'load'))
 WORKSPACE_KEY_BUILD_INFO = 'build_info'
 WORKSPACE_KEY_UPLOAD_DIR = 'koji_upload_dir'
 WORKSPACE_KEY_OVERRIDE_KWARGS = 'override_kwargs'
-UNREACHABLE_CLUSTER_RETRY_DELAY = 30
-UNREACHABLE_CLUSTER_RETRY_COUNT = 10
+UNREACHABLE_CLUSTER_RETRY_DELAY = 1
+UNREACHABLE_CLUSTER_RETRY_COUNT = 2
 
 
 def get_worker_build_info(workflow, platform):
@@ -196,6 +196,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.unreachable_cluster_retry_count = unreachable_cluster_retry_count
         self.unreachable_cluster_retry_delay = unreachable_cluster_retry_delay
         self.koji_upload_dir = self.get_koji_upload_dir()
+        self.fs_task_id = self.get_fs_task_id()
 
         if worker_build_image:
             self.log.warning('worker_build_image is deprecated, use config_kwargs instead')
@@ -260,8 +261,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     config.get_enabled_clusters_for_platform(platform)]
 
         if not clusters:
-            raise RuntimeError('No clusters found for platform {}!'
-                               .format(platform))
+            raise Exception('No clusters found for platform {}!'
+                            .format(platform))
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
@@ -397,29 +398,31 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     build_info.cancel_build()
                 except OsbsException:
                     pass
-                finally:
-                    raise
 
     def select_and_start_cluster(self, platform):
         ''' Choose a cluster and start a build on it '''
         release = self.get_release()
-        task_id = self.get_fs_task_id()
 
         retries = 0
         while retries < self.unreachable_cluster_retry_count:
-            clusters = self.get_clusters(platform)
+            try:
+                clusters = self.get_clusters(platform)
+            except OsbsException:
+                raise
             for cluster in clusters:
                 try:
-                    self.do_worker_build(release, cluster, self.koji_upload_dir, task_id)
+                    self.do_worker_build(release, cluster, self.koji_upload_dir, self.fs_task_id)
                     return
-                except:
+                except RuntimeError:
                     continue
+                except Exception:
+                    raise
             time.sleep(self.unreachable_cluster_retry_delay)
             retries += 1
+        raise RuntimeError('Could not find appropriate cluster for worker build.')
 
     def run(self):
         platforms = self.get_platforms()
-        koji_upload_dir = self.koji_upload_dir
 
         thread_pool = ThreadPool(len(platforms))
         result = thread_pool.map_async(self.select_and_start_cluster, platforms)
@@ -458,7 +461,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         }
 
         workspace = self.workflow.plugin_workspace.setdefault(self.key, {})
-        workspace[WORKSPACE_KEY_UPLOAD_DIR] = koji_upload_dir
+        workspace[WORKSPACE_KEY_UPLOAD_DIR] = self.koji_upload_dir
         workspace[WORKSPACE_KEY_BUILD_INFO] = {build_info.platform: build_info
                                                for build_info in self.worker_builds}
 
