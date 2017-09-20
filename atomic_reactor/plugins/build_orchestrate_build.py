@@ -407,8 +407,10 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         while retries < self.unreachable_cluster_retry_count:
             try:
                 clusters = self.get_clusters(platform)
-            except OsbsException:
+            except BuildCanceledException:
                 raise
+            except OsbsException:
+                continue
             except Exception:
                 raise
             for cluster in clusters:
