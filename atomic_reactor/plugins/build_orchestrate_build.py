@@ -197,6 +197,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.unreachable_cluster_retry_delay = unreachable_cluster_retry_delay
         self.koji_upload_dir = self.get_koji_upload_dir()
         self.fs_task_id = self.get_fs_task_id()
+        self.release = self.get_release()
 
         if worker_build_image:
             self.log.warning('worker_build_image is deprecated, use config_kwargs instead')
@@ -400,22 +401,21 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
 
     def select_and_start_cluster(self, platform):
         ''' Choose a cluster and start a build on it '''
-        release = self.get_release()
 
-        retries = 0
-        while retries < self.unreachable_cluster_retry_count:
+        possible_clusters = None
+        for attempt in range(self.unreachable_cluster_retry_count):
             try:
-                clusters = self.get_clusters(platform)
+                possible_clusters = self.get_clusters(platform)
             except OsbsException:
-                continue
-            for cluster in clusters:
+                pass
+            for cluster in possible_clusters or []:
                 try:
-                    self.do_worker_build(release, cluster, self.koji_upload_dir, self.fs_task_id)
+                    self.do_worker_build(self.release, cluster, self.koji_upload_dir,
+                                         self.fs_task_id)
                     return
                 except RuntimeError:
                     continue
             time.sleep(self.unreachable_cluster_retry_delay)
-            retries += 1
         raise RuntimeError('Could not find appropriate cluster for worker build.')
 
     def run(self):
