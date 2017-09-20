@@ -786,7 +786,7 @@ def test_orchestrate_build_get_fs_task_id(tmpdir, task_id, error):
         assert not build_result.is_failed()
 
 
-@pytest.mark.parametrize('fail_at', ('all', 'first', 'build_canceled'))
+@pytest.mark.parametrize('fail_at', ('all', 'first'))
 def test_orchestrate_build_failed_to_list_builds(tmpdir, fail_at):
     workflow = mock_workflow(tmpdir)
     mock_osbs()  # Current builds is a constant 2
