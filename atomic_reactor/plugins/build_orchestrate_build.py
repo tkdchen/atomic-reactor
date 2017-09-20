@@ -409,6 +409,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                 clusters = self.get_clusters(platform)
             except OsbsException:
                 raise
+            except Exception:
+                raise
             for cluster in clusters:
                 try:
                     self.do_worker_build(release, cluster, self.koji_upload_dir, self.fs_task_id)
@@ -428,12 +430,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         result = thread_pool.map_async(self.select_and_start_cluster, platforms)
 
         try:
-            while not result.ready():
-                # The wait call is a blocking call which prevents signals
-                # from being processed. Wait for short intervals instead
-                # of a single long interval, so build cancellation can
-                # be handled virtually immediately.
-                result.wait(1)
+            result.get()
         # Always clean up worker builds on any error to avoid
         # runaway worker builds (includes orchestrator build cancellation)
         except Exception:
@@ -444,6 +441,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             while not result.ready():
                 result.wait(1)
             raise
+        thread_pool.close()
+        thread_pool.join()
 
         annotations = {'worker-builds': {
             build_info.platform: build_info.get_annotations()
