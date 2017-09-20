@@ -261,8 +261,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     config.get_enabled_clusters_for_platform(platform)]
 
         if not clusters:
-            raise Exception('No clusters found for platform {}!'
-                            .format(platform))
+            raise ValueError('No clusters found for platform {}!'
+                             .format(platform))
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
@@ -410,16 +410,12 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                 raise
             except OsbsException:
                 continue
-            except Exception:
-                raise
             for cluster in clusters:
                 try:
                     self.do_worker_build(release, cluster, self.koji_upload_dir, self.fs_task_id)
                     return
                 except RuntimeError:
                     continue
-                except Exception:
-                    raise
             time.sleep(self.unreachable_cluster_retry_delay)
             retries += 1
         raise RuntimeError('Could not find appropriate cluster for worker build.')
