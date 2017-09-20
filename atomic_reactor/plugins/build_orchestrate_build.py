@@ -376,7 +376,6 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         except Exception:
             self.log.exception('%s - failed to create worker build',
                                cluster_info.platform)
-            raise
 
         build_info = WorkerBuildInfo(build=build, cluster_info=cluster_info, logger=self.log)
         self.worker_builds.append(build_info)
