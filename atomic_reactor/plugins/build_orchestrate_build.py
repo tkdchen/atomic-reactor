@@ -255,7 +255,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         return ClusterInfo(cluster, platform, osbs, load)
 
     def get_clusters(self, platform):
-        ''' yield clusters by load '''
+        ''' return clusters sorted by load '''
         config = get_config(self.workflow)
         clusters = [self.get_cluster_info(cluster, platform) for cluster in
                     config.get_enabled_clusters_for_platform(platform)]
@@ -272,7 +272,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                                .format(platform))
 
         reachable_clusters = sorted(reachable_clusters, key=lambda c: c.load)
-        return iter(reachable_clusters)
+        return reachable_clusters
 
     def get_release(self):
         labels = df_parser(self.workflow.builder.df_path, workflow=self.workflow).labels
