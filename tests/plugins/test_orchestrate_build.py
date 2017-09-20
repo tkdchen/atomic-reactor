@@ -433,19 +433,19 @@ def test_orchestrate_build_cancelation(tmpdir):
         def __init__(self):
             self.exception_raised = False
 
-        def wait(self, timeout=None):
+        def get(self, timeout=None):
             time.sleep(0.1)
             if not self.exception_raised:
                 self.exception_raised = True
                 raise BuildCanceledException()
 
     raise_once = RaiseOnce()
-    (flexmock(AsyncResult).should_receive('wait')
-        .replace_with(raise_once.wait))
+    (flexmock(AsyncResult).should_receive('get')
+        .replace_with(raise_once.get))
 
     # Required due to python3 implementation.
-    (flexmock(AsyncResult).should_receive('get')
-        .and_return(None))
+    # (flexmock(AsyncResult).should_receive('get')
+    #     .and_return(None))
 
     with pytest.raises(PluginFailedException) as exc:
         runner.run()
