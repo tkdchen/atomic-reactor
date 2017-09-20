@@ -20,7 +20,7 @@ import time
 import logging
 
 from atomic_reactor.build import BuildResult
-from atomic_reactor.plugin import BuildStepPlugin, BuildCanceledException
+from atomic_reactor.plugin import BuildStepPlugin, BuildCanceledException, UnknownPlatformException
 from atomic_reactor.plugins.pre_reactor_config import get_config
 from atomic_reactor.plugins.pre_check_and_set_rebuild import is_rebuild
 from atomic_reactor.util import get_preferred_label, df_parser
@@ -262,8 +262,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     config.get_enabled_clusters_for_platform(platform)]
 
         if not clusters:
-            raise ValueError('No clusters found for platform {}!'
-                             .format(platform))
+            raise UnknownPlatformException('No clusters found for platform {}!'
+                                           .format(platform))
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]

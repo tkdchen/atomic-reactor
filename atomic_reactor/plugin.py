@@ -45,6 +45,10 @@ class BuildCanceledException(Exception):
     """Build was canceled"""
 
 
+class UnknownPlatformException(Exception):
+    """ No clusters could be found for a platform """
+
+
 class InappropriateBuildStepError(Exception):
     """Requested build step is not appropriate"""
 
