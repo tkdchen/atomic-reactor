@@ -177,7 +177,6 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                  osbs_client_config=None, worker_build_image=None,
                  config_kwargs=None,
                  find_cluster_retry_delay=FIND_CLUSTER_RETRY_DELAY,
-                 find_cluster_retry_count=FIND_CLUSTER_RETRY_COUNT,
                  max_cluster_fails=MAX_CLUSTER_FAILS):
         """
         constructor
