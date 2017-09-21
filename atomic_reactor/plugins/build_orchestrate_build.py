@@ -38,7 +38,6 @@ WORKSPACE_KEY_BUILD_INFO = 'build_info'
 WORKSPACE_KEY_UPLOAD_DIR = 'koji_upload_dir'
 WORKSPACE_KEY_OVERRIDE_KWARGS = 'override_kwargs'
 FIND_CLUSTER_RETRY_DELAY = 1
-FIND_CLUSTER_RETRY_COUNT = 2
 MAX_CLUSTER_FAILS = 2
 
 
@@ -197,7 +196,6 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.build_kwargs = build_kwargs
         self.osbs_client_config = osbs_client_config
         self.config_kwargs = config_kwargs or {}
-        self.find_cluster_retry_count = find_cluster_retry_count
         self.find_cluster_retry_delay = find_cluster_retry_delay
         self.max_cluster_fails = max_cluster_fails
         self.koji_upload_dir = self.get_koji_upload_dir()
