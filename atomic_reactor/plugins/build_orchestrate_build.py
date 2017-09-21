@@ -37,7 +37,7 @@ ClusterInfo = namedtuple('ClusterInfo', ('cluster', 'platform', 'osbs', 'load'))
 WORKSPACE_KEY_BUILD_INFO = 'build_info'
 WORKSPACE_KEY_UPLOAD_DIR = 'koji_upload_dir'
 WORKSPACE_KEY_OVERRIDE_KWARGS = 'override_kwargs'
-FIND_CLUSTER_RETRY_DELAY = 1
+FIND_CLUSTER_RETRY_DELAY = 1.0
 MAX_CLUSTER_FAILS = 2
 
 
@@ -243,14 +243,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         osbs = OSBS(conf, conf)
         try:
             current_builds = self.get_current_builds(osbs)
-        except OsbsException as e:
+        except OsbsException:
             # If the build is canceled reraise the error
-            if isinstance(e.cause, BuildCanceledException):
-                raise e
-
-            self.log.exception("Error occurred while listing builds on %s",
-                               cluster.name)
-            return ClusterInfo(cluster, platform, osbs, self.UNREACHABLE_CLUSTER_LOAD)
+            raise
 
         load = current_builds / cluster.max_concurrent_builds
         self.log.debug('enabled cluster %s for platform %s has load %s and active builds %s/%s',
@@ -271,12 +266,14 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                         continue
                 try:
                     clusters.append(self.get_cluster_info(cluster, platform))
+                except BuildCanceledException:
+                    raise
                 except OsbsException:
                     cluster_fails[cluster.name] += 1
                     retry_at[cluster.name] = now\
-                        + timedelta(seconds=self.unreachable_cluster_retry_delay)
+                        + timedelta(seconds=self.find_cluster_retry_delay)
             if not clusters:
-                time.sleep(min(retry_at.values()) - now)
+                time.sleep((max(timedelta(seconds=0), min(retry_at.values()) - now)).seconds)
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
@@ -434,7 +431,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                 except RuntimeError:
                     cluster_fails[cluster.name] += 1
                     retry_at[cluster.name] = datetime.datetime.now()\
-                        + timedelta(seconds=self.unreachable_cluster_retry_delay)
+                        + timedelta(seconds=float(self.unreachable_cluster_retry_delay))
                     continue
             clusters = [c for c in clusters
                         if cluster_fails[c.name] < self.max_cluster_fails]
