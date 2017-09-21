@@ -431,6 +431,46 @@ def test_orchestrate_choose_cluster_retry(tmpdir):
     runner.run()
 
 
+def test_orchestrate_choose_cluster_retry_timeout(tmpdir):
+
+    (flexmock(OSBS).should_receive('list_builds')
+        .and_raise(OsbsException)
+        .and_raise(OsbsException)
+        .and_raise(OsbsException))
+
+    workflow = mock_workflow(tmpdir)
+
+    mock_reactor_config(tmpdir, {
+        'x86_64': [
+            {'name': cluster[0], 'max_concurrent_builds': cluster[1]}
+            for cluster in [('chosen_x86_64', 5), ('spam', 4)]
+        ],
+        'ppc64le': [
+            {'name': cluster[0], 'max_concurrent_builds': cluster[1]}
+            for cluster in [('chosen_ppc64le', 5), ('ham', 5)]
+        ]
+    })
+
+    runner = BuildStepPluginsRunner(
+        workflow.builder.tasker,
+        workflow,
+        [{
+            'name': OrchestrateBuildPlugin.key,
+            'args': {
+                'platforms': ['x86_64', 'ppc64le'],
+                'build_kwargs': make_worker_build_kwargs(),
+                'osbs_client_config': str(tmpdir),
+                'find_cluster_retry_delay': .1,
+                'max_cluster_fails': 2
+            }
+        }]
+    )
+
+    with pytest.raises(Exception) as exc:
+        runner.run()
+    assert 'Could not find appropriate cluster for worker build.' in str(exc)
+
+
 def test_orchestrate_build_cancelation(tmpdir):
     workflow = mock_workflow(tmpdir)
     mock_osbs()
