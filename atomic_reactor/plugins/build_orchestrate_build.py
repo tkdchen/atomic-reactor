@@ -281,10 +281,6 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
 
-        if not reachable_clusters:
-            raise RuntimeError('All clusters for platform {} are unreachable!'
-                               .format(platform))
-
         reachable_clusters = sorted(reachable_clusters, key=lambda c: c.load)
         return reachable_clusters
 

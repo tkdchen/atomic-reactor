@@ -393,6 +393,43 @@ def test_orchestrate_build_annotations_and_labels(tmpdir, metadata_fragment):
     assert koji_upload_dir
 
 
+def test_orchestrate_choose_cluster_retry(tmpdir):
+
+    (flexmock(OSBS).should_receive('list_builds')
+        .and_raise(OsbsException)
+        .and_raise(OsbsException)
+        .and_return([1, 2, 3]))
+
+    workflow = mock_workflow(tmpdir)
+
+    mock_reactor_config(tmpdir, {
+        'x86_64': [
+            {'name': cluster[0], 'max_concurrent_builds': cluster[1]}
+            for cluster in [('chosen_x86_64', 5), ('spam', 4)]
+        ],
+        'ppc64le': [
+            {'name': cluster[0], 'max_concurrent_builds': cluster[1]}
+            for cluster in [('chosen_ppc64le', 5), ('ham', 5)]
+        ]
+    })
+
+    runner = BuildStepPluginsRunner(
+        workflow.builder.tasker,
+        workflow,
+        [{
+            'name': OrchestrateBuildPlugin.key,
+            'args': {
+                'platforms': ['x86_64', 'ppc64le'],
+                'build_kwargs': make_worker_build_kwargs(),
+                'osbs_client_config': str(tmpdir),
+                'unreachable_cluster_retry_delay': .1
+            }
+        }]
+    )
+
+    runner.run()
+
+
 def test_orchestrate_build_cancelation(tmpdir):
     workflow = mock_workflow(tmpdir)
     mock_osbs()
