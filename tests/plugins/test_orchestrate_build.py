@@ -422,7 +422,8 @@ def test_orchestrate_choose_cluster_retry(tmpdir):
                 'platforms': ['x86_64', 'ppc64le'],
                 'build_kwargs': make_worker_build_kwargs(),
                 'osbs_client_config': str(tmpdir),
-                'unreachable_cluster_retry_delay': .1
+                'find_cluster_retry_delay': .1,
+                'max_cluster_fails': 2
             }
         }]
     )
