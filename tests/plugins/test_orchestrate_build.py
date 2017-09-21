@@ -324,7 +324,7 @@ def test_orchestrate_build_annotations_and_labels(tmpdir, metadata_fragment):
                 'platforms': ['x86_64', 'ppc64le'],
                 'build_kwargs': make_worker_build_kwargs(),
                 'osbs_client_config': str(tmpdir),
-                'unreachable_cluster_retry_count': 2,
+                'max_cluster_fails': 2,
                 'unreachable_cluster_retry_delay': 1
             }
         }]
