@@ -7,7 +7,7 @@ of the BSD license. See the LICENSE file for details.
 """
 from __future__ import unicode_literals, division
 
-from collections import namedtuple
+from collections import namedtuple, Counter
 from copy import deepcopy
 from multiprocessing.pool import ThreadPool
 
@@ -18,6 +18,8 @@ import random
 from string import ascii_letters
 import time
 import logging
+from datetime import timedelta
+import datetime
 
 from atomic_reactor.build import BuildResult
 from atomic_reactor.plugin import BuildStepPlugin, BuildCanceledException, UnknownPlatformException
@@ -35,8 +37,9 @@ ClusterInfo = namedtuple('ClusterInfo', ('cluster', 'platform', 'osbs', 'load'))
 WORKSPACE_KEY_BUILD_INFO = 'build_info'
 WORKSPACE_KEY_UPLOAD_DIR = 'koji_upload_dir'
 WORKSPACE_KEY_OVERRIDE_KWARGS = 'override_kwargs'
-UNREACHABLE_CLUSTER_RETRY_DELAY = 1
-UNREACHABLE_CLUSTER_RETRY_COUNT = 2
+FIND_CLUSTER_RETRY_DELAY = 1
+FIND_CLUSTER_RETRY_COUNT = 2
+MAX_CLUSTER_FAILS = 2
 
 
 def get_worker_build_info(workflow, platform):
@@ -174,8 +177,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
     def __init__(self, tasker, workflow, platforms, build_kwargs,
                  osbs_client_config=None, worker_build_image=None,
                  config_kwargs=None,
-                 unreachable_cluster_retry_delay=UNREACHABLE_CLUSTER_RETRY_DELAY,
-                 unreachable_cluster_retry_count=UNREACHABLE_CLUSTER_RETRY_COUNT):
+                 find_cluster_retry_delay=FIND_CLUSTER_RETRY_DELAY,
+                 find_cluster_retry_count=FIND_CLUSTER_RETRY_COUNT,
+                 max_cluster_fails=MAX_CLUSTER_FAILS):
         """
         constructor
 
@@ -193,8 +197,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         self.build_kwargs = build_kwargs
         self.osbs_client_config = osbs_client_config
         self.config_kwargs = config_kwargs or {}
-        self.unreachable_cluster_retry_count = unreachable_cluster_retry_count
-        self.unreachable_cluster_retry_delay = unreachable_cluster_retry_delay
+        self.find_cluster_retry_count = find_cluster_retry_count
+        self.find_cluster_retry_delay = find_cluster_retry_delay
+        self.max_cluster_fails = max_cluster_fails
         self.koji_upload_dir = self.get_koji_upload_dir()
         self.fs_task_id = self.get_fs_task_id()
         self.release = self.get_release()
@@ -255,15 +260,26 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                        cluster.name, platform, load, current_builds, cluster.max_concurrent_builds)
         return ClusterInfo(cluster, platform, osbs, load)
 
-    def get_clusters(self, platform):
+    def get_clusters(self, all_clusters, cluster_fails, platform, retry_at):
         ''' return clusters sorted by load '''
-        config = get_config(self.workflow)
-        clusters = [self.get_cluster_info(cluster, platform) for cluster in
-                    config.get_enabled_clusters_for_platform(platform)]
 
-        if not clusters:
-            raise UnknownPlatformException('No clusters found for platform {}!'
-                                           .format(platform))
+        clusters = []
+        now = datetime.datetime.now()
+        while not clusters:
+            for cluster in all_clusters:
+                if cluster_fails[cluster.name] >= self.max_cluster_fails:
+                    continue
+                if cluster.name in retry_at:
+                    if now < retry_at[cluster.name]:
+                        continue
+                try:
+                    clusters.append(self.get_cluster_info(cluster, platform))
+                except OsbsException:
+                    cluster_fails[cluster.name] += 1
+                    retry_at[cluster.name] = now\
+                        + timedelta(seconds=self.unreachable_cluster_retry_delay)
+            if not clusters:
+                time.sleep(min(retry_at.values()) - now)
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
@@ -402,21 +418,33 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
     def select_and_start_cluster(self, platform):
         ''' Choose a cluster and start a build on it '''
 
+        config = get_config(self.workflow)
+        clusters = config.get_enabled_clusters_for_platform(platform)
+
+        if not clusters:
+            raise UnknownPlatformException('No clusters found for platform {}!'
+                                           .format(platform))
+
+        cluster_fails = Counter()
+        retry_at = {}
         possible_clusters = None
-        for attempt in range(self.unreachable_cluster_retry_count):
-            try:
-                possible_clusters = self.get_clusters(platform)
-            except OsbsException:
-                pass
+
+        while True:
+            if not clusters:
+                raise RuntimeError('Could not find appropriate cluster for worker build.')
+            possible_clusters = self.get_clusters(clusters, cluster_fails, platform, retry_at)
             for cluster in possible_clusters or []:
                 try:
                     self.do_worker_build(self.release, cluster, self.koji_upload_dir,
                                          self.fs_task_id)
                     return
                 except RuntimeError:
+                    cluster_fails[cluster.name] += 1
+                    retry_at[cluster.name] = datetime.datetime.now()\
+                        + timedelta(seconds=self.unreachable_cluster_retry_delay)
                     continue
-            time.sleep(self.unreachable_cluster_retry_delay)
-        raise RuntimeError('Could not find appropriate cluster for worker build.')
+            clusters = [c for c in clusters
+                        if cluster_fails[c.name] < self.max_cluster_fails]
 
     def run(self):
         platforms = self.get_platforms()
