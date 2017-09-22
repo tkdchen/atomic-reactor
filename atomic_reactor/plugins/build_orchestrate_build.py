@@ -276,11 +276,11 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                 time.sleep((max(timedelta(seconds=0),
                            min(retry_at.values()) - datetime.datetime.now())).seconds)
 
-        reachable_clusters = [cluster for cluster in clusters
-                              if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
+        clusters = [cluster for cluster in clusters
+                    if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
 
-        reachable_clusters = sorted(reachable_clusters, key=lambda c: c.load)
-        return reachable_clusters
+        clusters = sorted(clusters, key=lambda c: c.load)
+        return clusters
 
     def get_release(self):
         labels = df_parser(self.workflow.builder.df_path, workflow=self.workflow).labels
