@@ -256,13 +256,13 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         ''' return clusters sorted by load '''
 
         clusters = []
-        now = datetime.datetime.now()
-        while not clusters:
+        while all_clusters and not clusters:
             for cluster in all_clusters:
                 if cluster_fails[cluster.name] >= self.max_cluster_fails:
+                    all_clusters.remove(cluster)
                     continue
                 if cluster.name in retry_at:
-                    if now < retry_at[cluster.name]:
+                    if datetime.datetime.now() < retry_at[cluster.name]:
                         continue
                 try:
                     clusters.append(self.get_cluster_info(cluster, platform))
@@ -270,10 +270,11 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     raise
                 except OsbsException:
                     cluster_fails[cluster.name] += 1
-                    retry_at[cluster.name] = now\
+                    retry_at[cluster.name] = datetime.datetime.now()\
                         + timedelta(seconds=self.find_cluster_retry_delay)
             if not clusters:
-                time.sleep((max(timedelta(seconds=0), min(retry_at.values()) - now)).seconds)
+                time.sleep((max(timedelta(seconds=0),
+                           min(retry_at.values()) - datetime.datetime.now())).seconds)
 
         reachable_clusters = [cluster for cluster in clusters
                               if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
