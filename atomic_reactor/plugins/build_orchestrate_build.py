@@ -416,7 +416,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             raise UnknownPlatformException('No clusters found for platform {}!'
                                            .format(platform))
 
+        # cluster_fails is keyed by cluster name and counts list_builds or start build fails
         cluster_fails = Counter()
+        # retry at is keyed by cluster name and the value is a datetime object
         retry_at = {}
         possible_clusters = None
 
