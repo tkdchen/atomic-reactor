@@ -426,7 +426,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             if not clusters:
                 raise RuntimeError('Could not find appropriate cluster for worker build.')
             possible_clusters = self.get_clusters(clusters, cluster_fails, platform, retry_at)
-            for cluster in possible_clusters or []:
+            for cluster in possible_clusters:
                 try:
                     self.do_worker_build(self.release, cluster, self.koji_upload_dir,
                                          self.fs_task_id)
