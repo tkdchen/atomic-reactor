@@ -270,8 +270,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     raise
                 except OsbsException:
                     cluster_fails[cluster.name] += 1
-                    retry_at[cluster.name] = datetime.datetime.now()\
-                        + timedelta(seconds=self.find_cluster_retry_delay)
+                    td = timedelta(seconds=float(self.find_cluster_retry_delay))
+                    retry_at[cluster.name] = datetime.datetime.now() + td
             if not clusters:
                 time.sleep((max(timedelta(seconds=0),
                            min(retry_at.values()) - datetime.datetime.now())).seconds)
@@ -433,8 +433,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     return
                 except RuntimeError:
                     cluster_fails[cluster.name] += 1
-                    retry_at[cluster.name] = datetime.datetime.now()\
-                        + timedelta(seconds=float(self.unreachable_cluster_retry_delay))
+                    td = timedelta(seconds=float(self.unreachable_cluster_retry_delay))
+                    retry_at[cluster.name] = datetime.datetime.now() + td
                     continue
             clusters = [c for c in clusters
                         if cluster_fails[c.name] < self.max_cluster_fails]
