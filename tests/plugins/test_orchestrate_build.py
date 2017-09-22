@@ -909,7 +909,7 @@ def test_orchestrate_build_failed_to_list_builds(tmpdir, fail_at):
         with pytest.raises(PluginFailedException) as exc:
             build_result = runner.run()
         if fail_at == 'all':
-            assert 'All clusters for platform x86_64 are unreachable' in str(exc)
+            assert 'Could not find appropriate cluster for worker build.' in str(exc)
         elif fail_at == 'build_canceled':
             assert 'BuildCanceledException()' in str(exc)
 
