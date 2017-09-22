@@ -431,7 +431,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                     self.do_worker_build(self.release, cluster, self.koji_upload_dir,
                                          self.fs_task_id)
                     return
-                except RuntimeError:
+                except BuildCanceledException:
+                    raise
+                except Exception:
                     cluster_fails[cluster.name] += 1
                     td = timedelta(seconds=float(self.unreachable_cluster_retry_delay))
                     retry_at[cluster.name] = datetime.datetime.now() + td
