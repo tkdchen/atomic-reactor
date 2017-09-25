@@ -207,6 +207,36 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
 
         self.worker_builds = []
 
+    class ClusterRetryContexts(object):
+        def __init__(self, clusters, max_cluster_fails, find_cluster_retry_delay):
+            self.clusters = list(clusters)
+            self.retry_at = {}
+            self.failed = set()
+            self.fails = Counter()
+            self.max_cluster_fails = max_cluster_fails
+            self.delay = find_cluster_retry_delay
+
+        def in_retry_wait(self, cluster):
+            if cluster.name in self.retry_at:
+                return datetime.datetime.now() < self.retry_at[cluster.name]
+
+            return False
+
+        def try_again_later(self, cluster, seconds):
+            name = cluster.name
+            self.fails[name] += 1
+            if self.fails[name] >= self.max_cluster_fails:
+                self.failed.add(name)
+            else:
+                self.retry_at[name] = (datetime.datetime.now() +
+                                       timedelta(seconds=self.delay))
+
+            return name not in self.failed
+
+        def wait_for_any(self):
+            time_until_next = (min(self.retry_at.values()) - datetime.datetime.now())
+            time.sleep(max(timedelta(seconds=0), time_until_next).seconds)
+
     def make_list(self, value):
         if not isinstance(value, list):
             value = [value]
@@ -252,29 +282,23 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                        cluster.name, platform, load, current_builds, cluster.max_concurrent_builds)
         return ClusterInfo(cluster, platform, osbs, load)
 
-    def get_clusters(self, all_clusters, cluster_fails, platform, retry_at):
+    def get_clusters(self, all_clusters, platform, retry_info):
         ''' return clusters sorted by load '''
 
         clusters = []
         while all_clusters and not clusters:
             for cluster in all_clusters:
-                if cluster_fails[cluster.name] >= self.max_cluster_fails:
-                    all_clusters.remove(cluster)
+                if retry_info.in_retry_wait(cluster):
                     continue
-                if cluster.name in retry_at:
-                    if datetime.datetime.now() < retry_at[cluster.name]:
-                        continue
                 try:
                     clusters.append(self.get_cluster_info(cluster, platform))
                 except BuildCanceledException:
                     raise
                 except OsbsException:
-                    cluster_fails[cluster.name] += 1
-                    td = timedelta(seconds=float(self.find_cluster_retry_delay))
-                    retry_at[cluster.name] = datetime.datetime.now() + td
-            if not clusters:
-                time.sleep((max(timedelta(seconds=0),
-                           min(retry_at.values()) - datetime.datetime.now())).seconds)
+                    if not retry_info.try_again_later(cluster, self.find_cluster_retry_delay):
+                        all_clusters.remove(cluster)
+                if not clusters:
+                    retry_info.wait_for_any()
 
         clusters = [cluster for cluster in clusters
                     if cluster.load != self.UNREACHABLE_CLUSTER_LOAD]
@@ -416,16 +440,14 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
             raise UnknownPlatformException('No clusters found for platform {}!'
                                            .format(platform))
 
-        # cluster_fails is keyed by cluster name and counts list_builds or start build fails
-        cluster_fails = Counter()
-        # retry at is keyed by cluster name and the value is a datetime object
-        retry_at = {}
         possible_clusters = None
+        retry_info = self.ClusterRetryContexts(clusters, self.max_cluster_fails,
+                                               self.find_cluster_retry_delay)
 
         while True:
             if not clusters:
                 raise RuntimeError('Could not find appropriate cluster for worker build.')
-            possible_clusters = self.get_clusters(clusters, cluster_fails, platform, retry_at)
+            possible_clusters = self.get_clusters(clusters, platform, retry_info)
             for cluster in possible_clusters:
                 try:
                     self.do_worker_build(self.release, cluster, self.koji_upload_dir,
@@ -434,12 +456,8 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
                 except BuildCanceledException:
                     raise
                 except Exception:
-                    cluster_fails[cluster.name] += 1
-                    td = timedelta(seconds=float(self.unreachable_cluster_retry_delay))
-                    retry_at[cluster.name] = datetime.datetime.now() + td
-                    continue
-            clusters = [c for c in clusters
-                        if cluster_fails[c.name] < self.max_cluster_fails]
+                    if not retry_info.try_again_later(cluster, self.find_cluster_retry_delay):
+                        clusters.remove(cluster)
 
     def run(self):
         platforms = self.get_platforms()
