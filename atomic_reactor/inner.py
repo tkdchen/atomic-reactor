@@ -495,7 +495,7 @@ def build_inside(input_method, input_args=None, substitutions=None):
 
         cleaned_input_args['substitutions'] = cleaned_subs
 
-        plugin_files = cleaned_input_args.getattr('plugin_files', [])
+        plugin_files = cleaned_input_args.get('plugin_files', [])
         loaded_plugins = PluginDiscoverer(plugin_files).plugin_classes
 
         input_runner = InputPluginsRunner([{'name': input_method,
