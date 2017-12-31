@@ -17,6 +17,7 @@ import docker
 
 from atomic_reactor.build import InsideBuilder
 from atomic_reactor.plugin import (
+    PluginDiscoverer,
     AutoRebuildCanceledException,
     BuildCanceledException,
     BuildStepPluginsRunner,
@@ -376,9 +377,12 @@ class DockerBuildWorkflow(object):
         try:
             signal.signal(signal.SIGTERM, self.throw_canceled_build_exception)
             # time to run pre-build plugins, so they can access cloned repo
+            loaded_plugins = PluginDiscoverer(self.plugin_files).plugin_classes
+
             logger.info("running pre-build plugins")
             prebuild_runner = PreBuildPluginsRunner(self.builder.tasker, self,
                                                     self.prebuild_plugins_conf,
+                                                    loaded_plugins,
                                                     plugin_files=self.plugin_files)
             try:
                 prebuild_runner.run()
@@ -393,6 +397,7 @@ class DockerBuildWorkflow(object):
             logger.info("running buildstep plugins")
             buildstep_runner = BuildStepPluginsRunner(self.builder.tasker, self,
                                                       self.buildstep_plugins_conf,
+                                                      loaded_plugins,
                                                       plugin_files=self.plugin_files)
             try:
                 self.build_result = buildstep_runner.run()
@@ -411,6 +416,7 @@ class DockerBuildWorkflow(object):
             # run prepublish plugins
             prepublish_runner = PrePublishPluginsRunner(self.builder.tasker, self,
                                                         self.prepublish_plugins_conf,
+                                                        loaded_plugins,
                                                         plugin_files=self.plugin_files)
             try:
                 prepublish_runner.run()
@@ -431,6 +437,7 @@ class DockerBuildWorkflow(object):
 
             postbuild_runner = PostBuildPluginsRunner(self.builder.tasker, self,
                                                       self.postbuild_plugins_conf,
+                                                      loaded_plugins,
                                                       plugin_files=self.plugin_files)
             try:
                 postbuild_runner.run()
@@ -447,6 +454,7 @@ class DockerBuildWorkflow(object):
             signal.signal(signal.SIGTERM, lambda *args: None)
             exit_runner = ExitPluginsRunner(self.builder.tasker, self,
                                             self.exit_plugins_conf,
+                                            loaded_plugins,
                                             plugin_files=self.plugin_files)
             try:
                 exit_runner.run(keep_going=True)
