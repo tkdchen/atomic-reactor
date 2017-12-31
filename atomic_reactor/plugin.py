@@ -108,19 +108,19 @@ class BuildPlugin(Plugin):
 
 class PluginsRunner(object):
 
-    def __init__(self, plugins_conf, *args, **kwargs):
+    def __init__(self, plugin_class_name, plugins_conf, *args, **kwargs):
         """
         constructor
 
         :param plugin_class_name: str, name of plugin class to filter (e.g. 'PreBuildPlugin')
         :param plugins_conf: dict, configuration for plugins
         """
-        self.plugins_results = {}
+        self.plugins_results = getattr(self, "plugins_results", {})
         self.plugins_conf = plugins_conf or []
         self.plugin_files = kwargs.get("plugin_files", [])
-        self.plugin_classes = self.load_plugins()
+        self.plugin_classes = self.load_plugins(plugin_class_name)
 
-    def load_plugins(self):
+    def load_plugins(self, plugin_class_name):
         """
         load all available plugins
         """
@@ -133,7 +133,7 @@ class PluginsRunner(object):
         if self.plugin_files:
             logger.debug("loading additional plugins from files '%s'", self.plugin_files)
             files += self.plugin_files
-        # plugin_class = globals()[plugin_class_name]
+        plugin_class = globals()[plugin_class_name]
         plugin_classes = {}
         for f in files:
             logger.debug("load file '%s'", f)
@@ -145,19 +145,19 @@ class PluginsRunner(object):
                 continue
             for name in dir(f_module):
                 binding = getattr(f_module, name, None)
-                # try:
-                #     # if you try to compare binding and PostBuildPlugin, python won't match them
-                #     # if you call this script directly b/c:
-                #     # ! <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
-                #     # '__main__.PostBuildPlugin'>
-                #     # but
-                #     # <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
-                #     # 'atomic_reactor.plugin.PostBuildPlugin'>
-                #     is_sub = issubclass(binding, plugin_class)
-                # except TypeError:
-                #     is_sub = False
-                # if binding and plugin_class.__name__ != binding.__name__:
-                plugin_classes[binding.key] = binding
+                try:
+                    # if you try to compare binding and PostBuildPlugin, python won't match them
+                    # if you call this script directly b/c:
+                    # ! <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
+                    # '__main__.PostBuildPlugin'>
+                    # but
+                    # <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
+                    # 'atomic_reactor.plugin.PostBuildPlugin'>
+                    is_sub = issubclass(binding, plugin_class)
+                except TypeError:
+                    is_sub = False
+                if binding and is_sub and plugin_class.__name__ != binding.__name__:
+                    plugin_classes[binding.key] = binding
         return plugin_classes
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
@@ -322,7 +322,7 @@ class BuildPluginsRunner(PluginsRunner):
         """
         self.dt = dt
         self.workflow = workflow
-        # super(BuildPluginsRunner, self).__init__(plugin_class_name, plugins_conf, *args, **kwargs)
+        super(BuildPluginsRunner, self).__init__(plugin_class_name, plugins_conf, *args, **kwargs)
 
     def on_plugin_failed(self, plugin=None, exception=None):
         self.workflow.plugin_failed = True
@@ -400,8 +400,8 @@ class PreBuildPluginsRunner(BuildPluginsRunner):
     def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
         logger.info("initializing runner of pre-build plugins")
         self.plugins_results = workflow.prebuild_results
-        # super(PreBuildPluginsRunner, self).__init__(dt, workflow, 'PreBuildPlugin', plugins_conf,
-        #                                             *args, **kwargs)
+        super(PreBuildPluginsRunner, self).__init__(dt, workflow, 'PreBuildPlugin', plugins_conf,
+                                                    *args, **kwargs)
 
 
 class BuildStepPlugin(BuildPlugin):
@@ -533,7 +533,7 @@ class InputPlugin(Plugin):
 
 class InputPluginsRunner(PluginsRunner):
     def __init__(self, plugins_conf, *args, **kwargs):
-        # super(InputPluginsRunner, self).__init__('InputPlugin', plugins_conf, *args, **kwargs)
+        super(InputPluginsRunner, self).__init__('InputPlugin', plugins_conf, *args, **kwargs)
         self.plugins_results = {}
         self.autoinput = self.plugins_conf[0]['name'] == 'auto'
 
