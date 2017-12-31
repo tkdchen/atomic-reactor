@@ -140,7 +140,8 @@ class PluginDiscoverer(object):
             for name in dir(f_module):
                 binding = getattr(f_module, name, None)
                 if binding:
-                    plugin_classes[binding.key] = binding
+                    if hasattr(binding, 'key'):
+                        plugin_classes[binding.key] = binding
         return plugin_classes
 
 
