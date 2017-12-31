@@ -106,21 +106,16 @@ class BuildPlugin(Plugin):
         super(BuildPlugin, self).__init__(*args, **kwargs)
 
 
-class PluginsRunner(object):
+class PluginDiscoverer(object):
 
-    def __init__(self, plugin_class_name, plugins_conf, *args, **kwargs):
+    def __init__(self, plugin_files=None):
         """
         constructor
-
-        :param plugin_class_name: str, name of plugin class to filter (e.g. 'PreBuildPlugin')
-        :param plugins_conf: dict, configuration for plugins
         """
-        self.plugins_results = getattr(self, "plugins_results", {})
-        self.plugins_conf = plugins_conf or []
-        self.plugin_files = kwargs.get("plugin_files", [])
-        self.plugin_classes = self.load_plugins(plugin_class_name)
+        self.plugin_files = plugin_files
+        self.plugin_classes = self.load_plugins()
 
-    def load_plugins(self, plugin_class_name):
+    def load_plugins(self):
         """
         load all available plugins
         """
@@ -133,7 +128,6 @@ class PluginsRunner(object):
         if self.plugin_files:
             logger.debug("loading additional plugins from files '%s'", self.plugin_files)
             files += self.plugin_files
-        plugin_class = globals()[plugin_class_name]
         plugin_classes = {}
         for f in files:
             logger.debug("load file '%s'", f)
@@ -145,20 +139,24 @@ class PluginsRunner(object):
                 continue
             for name in dir(f_module):
                 binding = getattr(f_module, name, None)
-                try:
-                    # if you try to compare binding and PostBuildPlugin, python won't match them
-                    # if you call this script directly b/c:
-                    # ! <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
-                    # '__main__.PostBuildPlugin'>
-                    # but
-                    # <class 'plugins.plugin_rpmqa.PostBuildRPMqaPlugin'> <= <class
-                    # 'atomic_reactor.plugin.PostBuildPlugin'>
-                    is_sub = issubclass(binding, plugin_class)
-                except TypeError:
-                    is_sub = False
-                if binding and is_sub and plugin_class.__name__ != binding.__name__:
-                    plugin_classes[binding.key] = binding
+                if binding:
+                    if hasattr(binding, 'key'):
+                        plugin_classes[binding.key] = binding
         return plugin_classes
+
+
+class PluginsRunner(object):
+
+    def __init__(self, plugin_class_name, plugins_conf, loaded_plugins, *args, **kwargs):
+        """
+        constructor
+
+        :param plugin_class_name: str, name of plugin class to filter (e.g. 'PreBuildPlugin')
+        :param plugins_conf: dict, configuration for plugins
+        """
+        self.plugins_results = getattr(self, "plugins_results", {})
+        self.plugins_conf = plugins_conf or []
+        self.plugin_classes = loaded_plugins
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
         """
@@ -311,7 +309,8 @@ class PluginsRunner(object):
 
 
 class BuildPluginsRunner(PluginsRunner):
-    def __init__(self, dt, workflow, plugin_class_name, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugin_class_name, plugins_conf, loaded_plugins,
+                 *args, **kwargs):
         """
         constructor
 
@@ -322,7 +321,8 @@ class BuildPluginsRunner(PluginsRunner):
         """
         self.dt = dt
         self.workflow = workflow
-        super(BuildPluginsRunner, self).__init__(plugin_class_name, plugins_conf, *args, **kwargs)
+        super(BuildPluginsRunner, self).__init__(plugin_class_name, plugins_conf, loaded_plugins,
+                                                 *args, **kwargs)
 
     def on_plugin_failed(self, plugin=None, exception=None):
         self.workflow.plugin_failed = True
@@ -397,11 +397,11 @@ class PreBuildPlugin(BuildPlugin):
 
 class PreBuildPluginsRunner(BuildPluginsRunner):
 
-    def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugins_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of pre-build plugins")
         self.plugins_results = workflow.prebuild_results
         super(PreBuildPluginsRunner, self).__init__(dt, workflow, 'PreBuildPlugin', plugins_conf,
-                                                    *args, **kwargs)
+                                                    loaded_plugins, *args, **kwargs)
 
 
 class BuildStepPlugin(BuildPlugin):
@@ -410,7 +410,7 @@ class BuildStepPlugin(BuildPlugin):
 
 class BuildStepPluginsRunner(BuildPluginsRunner):
 
-    def __init__(self, dt, workflow, plugin_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugin_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of build-step plugin")
         self.plugins_results = workflow.buildstep_result
 
@@ -424,7 +424,7 @@ class BuildStepPluginsRunner(BuildPluginsRunner):
                 plugin_conf[i]['is_allowed_to_fail'] = False
 
         super(BuildStepPluginsRunner, self).__init__(
-            dt, workflow, 'BuildStepPlugin', plugin_conf, *args, **kwargs)
+            dt, workflow, 'BuildStepPlugin', plugin_conf, loaded_plugins, *args, **kwargs)
 
     def run(self, *args, **kwargs):
         builder = self.workflow.builder
@@ -447,11 +447,12 @@ class PrePublishPlugin(BuildPlugin):
 
 class PrePublishPluginsRunner(BuildPluginsRunner):
 
-    def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugins_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of pre-publish plugins")
         self.plugins_results = workflow.prepub_results
         super(PrePublishPluginsRunner, self).__init__(dt, workflow, 'PrePublishPlugin',
-                                                      plugins_conf, *args, **kwargs)
+                                                      plugins_conf, loaded_plugins, *args,
+                                                      **kwargs)
 
 
 class PostBuildPlugin(BuildPlugin):
@@ -460,11 +461,12 @@ class PostBuildPlugin(BuildPlugin):
 
 class PostBuildPluginsRunner(BuildPluginsRunner):
 
-    def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugins_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of post-build plugins")
         self.plugins_results = workflow.postbuild_results
         super(PostBuildPluginsRunner, self).__init__(dt, workflow, 'PostBuildPlugin',
-                                                     plugins_conf, *args, **kwargs)
+                                                     plugins_conf, loaded_plugins, *args,
+                                                     **kwargs)
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
         instance = super(PostBuildPluginsRunner, self).create_instance_from_plugin(plugin_class,
@@ -481,11 +483,12 @@ class ExitPlugin(PostBuildPlugin):
 
 
 class ExitPluginsRunner(BuildPluginsRunner):
-    def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugins_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of exit plugins")
         self.plugins_results = workflow.exit_results
         super(ExitPluginsRunner, self).__init__(dt, workflow, 'ExitPlugin',
-                                                plugins_conf, *args, **kwargs)
+                                                plugins_conf, loaded_plugins,
+                                                *args, **kwargs)
 
 
 class InputPlugin(Plugin):
@@ -532,8 +535,9 @@ class InputPlugin(Plugin):
 
 
 class InputPluginsRunner(PluginsRunner):
-    def __init__(self, plugins_conf, *args, **kwargs):
-        super(InputPluginsRunner, self).__init__('InputPlugin', plugins_conf, *args, **kwargs)
+    def __init__(self, plugins_conf, loaded_plugins, *args, **kwargs):
+        super(InputPluginsRunner, self).__init__('InputPlugin', plugins_conf, loaded_plugins,
+                                                 *args, **kwargs)
         self.plugins_results = {}
         self.autoinput = self.plugins_conf[0]['name'] == 'auto'
 
