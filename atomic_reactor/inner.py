@@ -337,6 +337,8 @@ class DockerBuildWorkflow(object):
         # List of RPMs that go into the final result, as per rpm_util.parse_rpm_output
         self.image_components = None
 
+        self.loaded_plugins = PluginDiscoverer(self.plugin_files).plugin_classes
+
         if client_version:
             logger.debug("build json was built by osbs-client %s", client_version)
 
@@ -377,12 +379,11 @@ class DockerBuildWorkflow(object):
         try:
             signal.signal(signal.SIGTERM, self.throw_canceled_build_exception)
             # time to run pre-build plugins, so they can access cloned repo
-            loaded_plugins = PluginDiscoverer(self.plugin_files).plugin_classes
 
             logger.info("running pre-build plugins")
             prebuild_runner = PreBuildPluginsRunner(self.builder.tasker, self,
                                                     self.prebuild_plugins_conf,
-                                                    loaded_plugins,
+                                                    self.loaded_plugins,
                                                     plugin_files=self.plugin_files)
             try:
                 prebuild_runner.run()
@@ -397,7 +398,7 @@ class DockerBuildWorkflow(object):
             logger.info("running buildstep plugins")
             buildstep_runner = BuildStepPluginsRunner(self.builder.tasker, self,
                                                       self.buildstep_plugins_conf,
-                                                      loaded_plugins,
+                                                      self.loaded_plugins,
                                                       plugin_files=self.plugin_files)
             try:
                 self.build_result = buildstep_runner.run()
@@ -416,7 +417,7 @@ class DockerBuildWorkflow(object):
             # run prepublish plugins
             prepublish_runner = PrePublishPluginsRunner(self.builder.tasker, self,
                                                         self.prepublish_plugins_conf,
-                                                        loaded_plugins,
+                                                        self.loaded_plugins,
                                                         plugin_files=self.plugin_files)
             try:
                 prepublish_runner.run()
@@ -437,7 +438,7 @@ class DockerBuildWorkflow(object):
 
             postbuild_runner = PostBuildPluginsRunner(self.builder.tasker, self,
                                                       self.postbuild_plugins_conf,
-                                                      loaded_plugins,
+                                                      self.loaded_plugins,
                                                       plugin_files=self.plugin_files)
             try:
                 postbuild_runner.run()
@@ -454,7 +455,7 @@ class DockerBuildWorkflow(object):
             signal.signal(signal.SIGTERM, lambda *args: None)
             exit_runner = ExitPluginsRunner(self.builder.tasker, self,
                                             self.exit_plugins_conf,
-                                            loaded_plugins,
+                                            self.loaded_plugins,
                                             plugin_files=self.plugin_files)
             try:
                 exit_runner.run(keep_going=True)
@@ -494,8 +495,12 @@ def build_inside(input_method, input_args=None, substitutions=None):
 
         cleaned_input_args['substitutions'] = cleaned_subs
 
+        plugin_files = cleaned_input_args.getattr('plugin_files', [])
+        loaded_plugins = PluginDiscoverer(plugin_files).plugin_classes
+
         input_runner = InputPluginsRunner([{'name': input_method,
-                                            'args': cleaned_input_args}])
+                                            'args': cleaned_input_args}],
+                                          loaded_plugins)
         build_json = input_runner.run()[input_method]
         logger.debug("build json: %s", build_json)
     if not build_json:
