@@ -447,7 +447,7 @@ class PrePublishPlugin(BuildPlugin):
 
 class PrePublishPluginsRunner(BuildPluginsRunner):
 
-    def __init__(self, dt, workflow, plugins_conf, *args, **kwargs):
+    def __init__(self, dt, workflow, plugins_conf, loaded_plugins, *args, **kwargs):
         logger.info("initializing runner of pre-publish plugins")
         self.plugins_results = workflow.prepub_results
         super(PrePublishPluginsRunner, self).__init__(dt, workflow, 'PrePublishPlugin',
