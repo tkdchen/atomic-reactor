@@ -145,6 +145,18 @@ class PluginDiscoverer(object):
         return plugin_classes
 
 
+class PreparedPlugin(object):
+
+    def __init__(self, name, plugin_class, plugin_conf, is_allowed_to_fail):
+        """
+        constructor
+        """
+        self.name = name
+        self.plugin_class = plugin_class
+        self.plugin_conf = plugin_conf
+        self.is_allowed_to_fail = is_allowed_to_fail
+
+
 class PluginsRunner(object):
 
     def __init__(self, plugin_class_name, plugins_conf, loaded_plugins, *args, **kwargs):
@@ -157,6 +169,8 @@ class PluginsRunner(object):
         self.plugins_results = getattr(self, "plugins_results", {})
         self.plugins_conf = plugins_conf or []
         self.plugin_classes = loaded_plugins
+        self.plugins = self.prepare_plugins
+
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
         """
