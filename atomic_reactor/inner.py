@@ -383,25 +383,24 @@ class DockerBuildWorkflow(object):
             logger.info("running pre-build plugins")
             prebuild_runner = PreBuildPluginsRunner(self.builder.tasker, self,
                                                     self.prebuild_plugins_conf,
-                                                    self.loaded_plugins,
-                                                    plugin_files=self.plugin_files)
+                                                    self.loaded_plugins)
 
             buildstep_runner = BuildStepPluginsRunner(self.builder.tasker, self,
                                                       self.buildstep_plugins_conf,
-                                                      self.loaded_plugins,
-                                                      plugin_files=self.plugin_files)
+                                                      self.loaded_plugins)
+
             prepublish_runner = PrePublishPluginsRunner(self.builder.tasker, self,
                                                         self.prepublish_plugins_conf,
-                                                        self.loaded_plugins,
-                                                        plugin_files=self.plugin_files)
+                                                        self.loaded_plugins)
+
             postbuild_runner = PostBuildPluginsRunner(self.builder.tasker, self,
                                                       self.postbuild_plugins_conf,
-                                                      self.loaded_plugins,
-                                                      plugin_files=self.plugin_files)
+                                                      self.loaded_plugins)
+
             exit_runner = ExitPluginsRunner(self.builder.tasker, self,
                                             self.exit_plugins_conf,
-                                            self.loaded_plugins,
-                                            plugin_files=self.plugin_files)
+                                            self.loaded_plugins)
+
             try:
                 prebuild_runner.run()
             except PluginFailedException as ex:
