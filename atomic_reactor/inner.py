@@ -385,6 +385,23 @@ class DockerBuildWorkflow(object):
                                                     self.prebuild_plugins_conf,
                                                     self.loaded_plugins,
                                                     plugin_files=self.plugin_files)
+
+            buildstep_runner = BuildStepPluginsRunner(self.builder.tasker, self,
+                                                      self.buildstep_plugins_conf,
+                                                      self.loaded_plugins,
+                                                      plugin_files=self.plugin_files)
+            prepublish_runner = PrePublishPluginsRunner(self.builder.tasker, self,
+                                                        self.prepublish_plugins_conf,
+                                                        self.loaded_plugins,
+                                                        plugin_files=self.plugin_files)
+            postbuild_runner = PostBuildPluginsRunner(self.builder.tasker, self,
+                                                      self.postbuild_plugins_conf,
+                                                      self.loaded_plugins,
+                                                      plugin_files=self.plugin_files)
+            exit_runner = ExitPluginsRunner(self.builder.tasker, self,
+                                            self.exit_plugins_conf,
+                                            self.loaded_plugins,
+                                            plugin_files=self.plugin_files)
             try:
                 prebuild_runner.run()
             except PluginFailedException as ex:
@@ -396,10 +413,7 @@ class DockerBuildWorkflow(object):
                 raise
 
             logger.info("running buildstep plugins")
-            buildstep_runner = BuildStepPluginsRunner(self.builder.tasker, self,
-                                                      self.buildstep_plugins_conf,
-                                                      self.loaded_plugins,
-                                                      plugin_files=self.plugin_files)
+
             try:
                 self.build_result = buildstep_runner.run()
 
@@ -415,10 +429,6 @@ class DockerBuildWorkflow(object):
                 self.builder.image_id = self.build_result.image_id
 
             # run prepublish plugins
-            prepublish_runner = PrePublishPluginsRunner(self.builder.tasker, self,
-                                                        self.prepublish_plugins_conf,
-                                                        self.loaded_plugins,
-                                                        plugin_files=self.plugin_files)
             try:
                 prepublish_runner.run()
             except PluginFailedException as ex:
@@ -436,10 +446,6 @@ class DockerBuildWorkflow(object):
                 self.layer_sizes = [{"diff_id": diff_id, "size": layer['Size']}
                                     for (diff_id, layer) in zip(diff_ids, reversed(history))]
 
-            postbuild_runner = PostBuildPluginsRunner(self.builder.tasker, self,
-                                                      self.postbuild_plugins_conf,
-                                                      self.loaded_plugins,
-                                                      plugin_files=self.plugin_files)
             try:
                 postbuild_runner.run()
             except PluginFailedException as ex:
@@ -453,10 +459,6 @@ class DockerBuildWorkflow(object):
         finally:
             # We need to make sure all exit plugins are executed
             signal.signal(signal.SIGTERM, lambda *args: None)
-            exit_runner = ExitPluginsRunner(self.builder.tasker, self,
-                                            self.exit_plugins_conf,
-                                            self.loaded_plugins,
-                                            plugin_files=self.plugin_files)
             try:
                 exit_runner.run(keep_going=True)
             except PluginFailedException as ex:
