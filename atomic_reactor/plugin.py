@@ -172,6 +172,7 @@ class PluginsRunner(object):
         self.plugins = self.prepare_plugins(kwargs.get('keep_going', False))
 
     def prepare_plugins(self, keep_going):
+        plugins = []
         for plugin_request in self.plugins_conf:
             try:
                 plugin_name = plugin_request['name']
@@ -204,8 +205,9 @@ class PluginsRunner(object):
                 plugin_is_allowed_to_fail = plugin_request['is_allowed_to_fail']
             except (TypeError, KeyError):
                 plugin_is_allowed_to_fail = getattr(plugin_class, "is_allowed_to_fail", True)
-            self.plugins.append(PreparedPlugin(plugin_name, plugin_class, plugin_conf,
-                                               plugin_is_allowed_to_fail))
+            plugins.append(PreparedPlugin(plugin_name, plugin_class, plugin_conf,
+                                          plugin_is_allowed_to_fail))
+        return plugins
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
         """
