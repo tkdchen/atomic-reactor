@@ -169,9 +169,9 @@ class PluginsRunner(object):
         self.plugins_results = getattr(self, "plugins_results", {})
         self.plugins_conf = plugins_conf or []
         self.plugin_classes = loaded_plugins
-        self.plugins = self.prepare_plugins()
+        self.plugins = self.prepare_plugins(kwargs.get('keep_going', False))
 
-    def prepare_plugins(self, keep_going=False):
+    def prepare_plugins(self, keep_going):
         for plugin_request in self.plugins_conf:
             try:
                 plugin_name = plugin_request['name']

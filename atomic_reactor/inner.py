@@ -399,7 +399,8 @@ class DockerBuildWorkflow(object):
 
             exit_runner = ExitPluginsRunner(self.builder.tasker, self,
                                             self.exit_plugins_conf,
-                                            self.loaded_plugins)
+                                            self.loaded_plugins,
+                                            keep_going=True)
 
             try:
                 prebuild_runner.run()
