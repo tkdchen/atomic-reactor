@@ -169,8 +169,43 @@ class PluginsRunner(object):
         self.plugins_results = getattr(self, "plugins_results", {})
         self.plugins_conf = plugins_conf or []
         self.plugin_classes = loaded_plugins
-        self.plugins = self.prepare_plugins
+        self.plugins = self.prepare_plugins()
 
+    def prepare_plugins(self, keep_going=False):
+        for plugin_request in self.plugins_conf:
+            try:
+                plugin_name = plugin_request['name']
+            except (TypeError, KeyError):
+                msg = "invalid plugin request, no key 'name': %s" % plugin_request
+                exc = None if keep_going else PluginFailedException(msg)
+                self.on_plugin_failed('?', exc)
+                logger.error(msg)
+                if keep_going:
+                    continue
+                raise exc
+
+            plugin_conf = plugin_request.get("args", {})
+            try:
+                plugin_class = self.plugin_classes[plugin_name]
+            except KeyError:
+                if plugin_request.get('required', True):
+                    msg = ("no such plugin: '%s', did you set "
+                           "the correct plugin type?") % plugin_name
+                    exc = PluginFailedException(msg)
+                    self.on_plugin_failed(plugin_name, exc)
+                    logger.error(msg)
+                    raise exc
+                else:
+                    # This plugin is marked as not being required
+                    logger.warning("plugin '%s' requested but not available",
+                                   plugin_name)
+                    continue
+            try:
+                plugin_is_allowed_to_fail = plugin_request['is_allowed_to_fail']
+            except (TypeError, KeyError):
+                plugin_is_allowed_to_fail = getattr(plugin_class, "is_allowed_to_fail", True)
+            self.plugins.append(PreparedPlugin(plugin_name, plugin_class, plugin_conf,
+                                               plugin_is_allowed_to_fail))
 
     def create_instance_from_plugin(self, plugin_class, plugin_conf):
         """
@@ -205,60 +240,30 @@ class PluginsRunner(object):
         failed_msgs = []
         plugin_successful = False
         plugin_response = None
-        for plugin_request in self.plugins_conf:
+        for plugin in self.plugins:
             plugin_successful = False
-            try:
-                plugin_name = plugin_request['name']
-            except (TypeError, KeyError):
-                msg = "invalid plugin request, no key 'name': %s" % plugin_request
-                exc = None if keep_going else PluginFailedException(msg)
-                self.on_plugin_failed('?', exc)
-                logger.error(msg)
-                if keep_going:
-                    continue
-                raise exc
 
-            plugin_conf = plugin_request.get("args", {})
-            try:
-                plugin_class = self.plugin_classes[plugin_name]
-            except KeyError:
-                if plugin_request.get('required', True):
-                    msg = ("no such plugin: '%s', did you set "
-                           "the correct plugin type?") % plugin_name
-                    exc = PluginFailedException(msg)
-                    self.on_plugin_failed(plugin_name, exc)
-                    logger.error(msg)
-                    raise exc
-                else:
-                    # This plugin is marked as not being required
-                    logger.warning("plugin '%s' requested but not available",
-                                   plugin_name)
-                    continue
-            try:
-                plugin_is_allowed_to_fail = plugin_request['is_allowed_to_fail']
-            except (TypeError, KeyError):
-                plugin_is_allowed_to_fail = getattr(plugin_class, "is_allowed_to_fail", True)
-
-            logger.debug("running plugin '%s'", plugin_name)
+            logger.debug("running plugin '%s'", plugin.name)
             start_time = datetime.datetime.now()
 
             plugin_response = None
             skip_response = False
             try:
-                plugin_instance = self.create_instance_from_plugin(plugin_class, plugin_conf)
-                self.save_plugin_timestamp(plugin_class.key, start_time)
+                plugin_instance = self.create_instance_from_plugin(plugin.plugin_class,
+                                                                   plugin.plugin_conf)
+                self.save_plugin_timestamp(plugin.plugin_class.key, start_time)
                 plugin_response = plugin_instance.run()
                 plugin_successful = True
                 if buildstep_phase:
                     assert isinstance(plugin_response, BuildResult)
                     if plugin_response.is_failed():
                         logger.error("Build step plugin %s failed: %s",
-                                     plugin_class.key,
+                                     plugin.plugin_class.key,
                                      plugin_response.fail_reason)
-                        self.on_plugin_failed(plugin_class.key,
+                        self.on_plugin_failed(plugin.plugin_class.key,
                                               plugin_response.fail_reason)
                         plugin_successful = False
-                        self.plugins_results[plugin_class.key] = plugin_response
+                        self.plugins_results[plugin.plugin_class.key] = plugin_response
                         break
 
             except AutoRebuildCanceledException as ex:
@@ -269,21 +274,21 @@ class PluginsRunner(object):
                 #   AutoRebuildCanceledException was raised here)
                 raise
             except InappropriateBuildStepError:
-                logger.debug('Build step %s is not appropriate', plugin_class.key)
+                logger.debug('Build step %s is not appropriate', plugin.plugin_class.key)
                 # don't put None, in results for InappropriateBuildStepError
                 skip_response = True
                 if not buildstep_phase:
                     raise
             except Exception as ex:
-                msg = "plugin '%s' raised an exception: %r" % (plugin_class.key, ex)
+                msg = "plugin '%s' raised an exception: %r" % (plugin.plugin_class.key, ex)
                 logger.debug(traceback.format_exc())
-                if not plugin_is_allowed_to_fail:
-                    self.on_plugin_failed(plugin_class.key, ex)
+                if not plugin.is_allowed_to_fail:
+                    self.on_plugin_failed(plugin.plugin_class.key, ex)
 
-                if plugin_is_allowed_to_fail or keep_going:
+                if plugin.is_allowed_to_fail or keep_going:
                     logger.warning(msg)
                     logger.info("error is not fatal, continuing...")
-                    if not plugin_is_allowed_to_fail:
+                    if not plugin.is_allowed_to_fail:
                         failed_msgs.append(msg)
                 else:
                     logger.error(msg)
@@ -296,13 +301,13 @@ class PluginsRunner(object):
                     finish_time = datetime.datetime.now()
                     duration = finish_time - start_time
                     seconds = duration.total_seconds()
-                    logger.debug("plugin '%s' finished in %ds", plugin_name, seconds)
-                    self.save_plugin_duration(plugin_class.key, seconds)
+                    logger.debug("plugin '%s' finished in %ds", plugin.name, seconds)
+                    self.save_plugin_duration(plugin.plugin_class.key, seconds)
             except Exception:
                 logger.exception("failed to save plugin duration")
 
             if not skip_response:
-                self.plugins_results[plugin_class.key] = plugin_response
+                self.plugins_results[plugin.plugin_class.key] = plugin_response
 
             if plugin_successful and buildstep_phase:
                 logger.debug('stopping further execution of plugins '
