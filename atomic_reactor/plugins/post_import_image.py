@@ -17,6 +17,8 @@ from osbs.exceptions import OsbsResponseException
 from atomic_reactor.plugin import PostBuildPlugin
 from atomic_reactor.util import get_build_json, get_primary_images
 
+import osbs
+osbs.set_logging()
 
 class ImportImagePlugin(PostBuildPlugin):
     """
@@ -67,6 +69,7 @@ class ImportImagePlugin(PostBuildPlugin):
         metadata = get_build_json().get("metadata", {})
         osbs_conf = Configuration(conf_file=None,
                                   openshift_url=self.url,
+                                  verbose=True,
                                   use_auth=self.use_auth,
                                   verify_ssl=self.verify_ssl,
                                   build_json_dir=self.build_json_dir,
