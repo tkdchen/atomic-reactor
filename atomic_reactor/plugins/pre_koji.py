@@ -9,14 +9,14 @@ of the BSD license. See the LICENSE file for details.
 Pre build plugin for koji build system
 """
 import os
-import koji
 from atomic_reactor.constants import YUM_REPOS_DIR
 from atomic_reactor.plugin import PreBuildPlugin
 from atomic_reactor.util import render_yum_repo
-from atomic_reactor.plugins.pre_reactor_config import get_koji_session, get_yum_proxy
+from atomic_reactor.plugins.mixins.koji_mixin import KojiPluginMixin
+from atomic_reactor.plugins.pre_reactor_config import get_yum_proxy
 
 
-class KojiPlugin(PreBuildPlugin):
+class KojiPlugin(PreBuildPlugin, KojiPluginMixin):
     key = "koji"
     is_allowed_to_fail = False
 
@@ -38,39 +38,38 @@ class KojiPlugin(PreBuildPlugin):
         super(KojiPlugin, self).__init__(tasker, workflow)
         self.target = target
 
-        self.koji_fallback = {
+        self.koji_config_fallback = {
             'hub_url': hub,
+            'root_url': root,
             'auth': {
                 'ssl_certs_dir': koji_ssl_certs_dir
             }
         }
 
-        self.xmlrpc = get_koji_session(self.workflow, self.koji_fallback)
-        self.pathinfo = koji.PathInfo(topdir=root)
         self.proxy = get_yum_proxy(self.workflow, proxy)
 
     def run(self):
         """
         run the plugin
         """
-        target_info = self.xmlrpc.getBuildTarget(self.target)
+        target_info = self.koji_session.getBuildTarget(self.target)
         if target_info is None:
             self.log.error("provided target '%s' doesn't exist", self.target)
             raise RuntimeError("Provided target '%s' doesn't exist!" % self.target)
-        tag_info = self.xmlrpc.getTag(target_info['build_tag_name'])
+        tag_info = self.koji_session.getTag(target_info['build_tag_name'])
 
         if not tag_info or 'name' not in tag_info:
             self.log.warning("No tag info was retrieved")
             return
 
-        repo_info = self.xmlrpc.getRepo(tag_info['id'])
+        repo_info = self.koji_session.getRepo(tag_info['id'])
 
         if not repo_info or 'id' not in repo_info:
             self.log.warning("No repo info was retrieved")
             return
 
         # to use urljoin, we would have to append '/', so let's append everything
-        baseurl = self.pathinfo.repo(repo_info['id'], tag_info['name']) + "/$basearch"
+        baseurl = self.koji_pathinfo.repo(repo_info['id'], tag_info['name']) + "/$basearch"
 
         self.log.info("baseurl = '%s'", baseurl)
 
