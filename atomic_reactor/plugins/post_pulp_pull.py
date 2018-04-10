@@ -63,14 +63,8 @@ class PulpPullPlugin(ExitPlugin, PostBuildPlugin):
         self.timeout = timeout
         self.retry_delay = retry_delay
 
-        pulp_config = get_pulp(workflow, False)
-        if pulp_config:
-            pulp_handler = get_pulp_session(workflow, self.log, NO_FALLBACK)
-            self.secret = pulp_handler.get_secret()
-            self.insecure = pulp_handler.get_insecure()
-        else:
-            self.insecure = insecure
-            self.secret = secret
+        self.insecure = insecure
+        self.secret = secret
 
         self.expect_v2schema2 = not get_prefer_schema1_digest(workflow, not expect_v2schema2)
         self.expect_v2schema2list = False  # automatically set in run()
