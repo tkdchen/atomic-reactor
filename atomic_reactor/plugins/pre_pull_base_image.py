@@ -195,8 +195,14 @@ class PullBaseImagePlugin(PreBuildPlugin):
     def get_expected_platforms(self):
         platforms = self.workflow.prebuild_results.get(PLUGIN_CHECK_AND_SET_PLATFORMS_KEY)
         if platforms:
+            self.log.info('Got platforms from %s plugin: %s', PLUGIN_CHECK_AND_SET_PLATFORMS_KEY,
+                          platforms)
             return platforms
 
         for plugin in self.workflow.buildstep_plugins_conf or []:
             if plugin['name'] == PLUGIN_BUILD_ORCHESTRATE_KEY:
+                self.log.info('Got platforms from %s plugin args: %s',
+                              PLUGIN_BUILD_ORCHESTRATE_KEY, platforms)
                 return plugin['args']['platforms']
+
+        self.log.info('uh oh, cannot get platforms')
