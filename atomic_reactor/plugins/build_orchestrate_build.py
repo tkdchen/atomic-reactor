@@ -441,10 +441,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         kwargs['conf_file'] = get_clusters_client_config_path(self.workflow,
                                                               self.osbs_client_config_fallback)
 
-        if platform in self.build_image_digests:
-            kwargs['build_image'] = self.build_image_digests[platform]
-        else:
-            raise RuntimeError("build_image for platform '%s' not available" % platform)
+        kwargs['build_image'] = self.build_image_digests[platform]
 
         osbs = self._get_openshift_session(kwargs)
 
@@ -824,6 +821,9 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
         if platforms == set([orchestrator_platform]):
             self.build_image_digests[orchestrator_platform] = current_buildimage
             return
+        from collections import defaultdict
+        self.build_image_digests = defaultdict(lambda: current_buildimage)
+        return
 
         # BuildConfig exists
         build_image, imagestream = self.get_image_info_from_buildconfig()
