@@ -705,6 +705,7 @@ class OrchestrateBuildPlugin(BuildStepPlugin):
 
     def check_manifest_list(self, build_image, orchestrator_platform, platforms,
                             current_buildimage):
+        return
         registry_name, image = build_image.split('/', 1)
         repo, tag = image.rsplit(':', 1)
 
