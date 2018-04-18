@@ -147,6 +147,7 @@ class PullBaseImagePlugin(PreBuildPlugin):
         self.log.debug("image '%s' is available", pulled_base)
 
     def validate_platforms_in_base_image(self, base_image):
+        return
         expected_platforms = self.get_expected_platforms()
         if not expected_platforms:
             self.log.info('Skipping validation of available platforms '
