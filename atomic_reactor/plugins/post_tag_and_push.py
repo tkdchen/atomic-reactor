@@ -120,6 +120,12 @@ class TagAndPushPlugin(PostBuildPlugin):
 
                 registry_image = image.copy()
                 registry_image.registry = registry
+
+                organization = registry.get('organization')
+                if organization:
+                    self.log.info('Registry %s uses organization %s', registry, organization)
+                    registry_image.enclose(organization)
+
                 if self.need_skopeo_push():
                     self.push_with_skopeo(registry_image, insecure, docker_push_secret)
                 else:

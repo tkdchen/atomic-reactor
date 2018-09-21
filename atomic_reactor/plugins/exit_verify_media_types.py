@@ -69,6 +69,12 @@ class VerifyMediaTypesPlugin(ExitPlugin):
 
             pullspec = image.copy()
             pullspec.registry = registry_name
+
+            organization = registry.get('organization')
+            if organization:
+                self.log.info('Registry %s uses organization %s', registry, organization)
+                pullspec.enclose(organization)
+
             insecure = registry.get('insecure', False)
             secret = registry.get('secret', None)
 

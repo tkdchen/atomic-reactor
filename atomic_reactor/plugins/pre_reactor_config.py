@@ -234,6 +234,7 @@ def get_registries(workflow, fallback=NO_FALLBACK):
             regdict['secret'] = registry['auth']['cfg_path']
         regdict['insecure'] = registry.get('insecure', False)
         regdict['expected_media_types'] = registry.get('expected_media_types', [])
+        regdict['organization'] = registry.get('organization')
 
         registries_cm[reguri.docker_uri] = regdict
 
