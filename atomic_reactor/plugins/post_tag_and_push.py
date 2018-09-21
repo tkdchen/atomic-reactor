@@ -108,8 +108,10 @@ class TagAndPushPlugin(PostBuildPlugin):
         config_registry_image = None
         for registry, registry_conf in self.registries.items():
             insecure = registry_conf.get('insecure', False)
+            organization = registry.get('organization')
             push_conf_registry = \
-                self.workflow.push_conf.add_docker_registry(registry, insecure=insecure)
+                self.workflow.push_conf.add_docker_registry(registry, insecure=insecure,
+                                                            organization=organization)
 
             docker_push_secret = registry_conf.get('secret', None)
             self.log.info("Registry %s secret %s", registry, docker_push_secret)
@@ -121,7 +123,6 @@ class TagAndPushPlugin(PostBuildPlugin):
                 registry_image = image.copy()
                 registry_image.registry = registry
 
-                organization = registry.get('organization')
                 if organization:
                     self.log.info('Registry %s uses organization %s', registry, organization)
                     registry_image.enclose(organization)

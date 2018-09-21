@@ -363,6 +363,7 @@ class KojiPromotePlugin(ExitPlugin):
             for image in self.workflow.tag_conf.images:
                 image_str = image.to_str()
                 if image_str in registry.digests:
+                    # TODO: This will probably not work if push conf stores enclosed image name
                     image_digests = registry.digests[image_str]
                     if pulp is None:
                         digest_list = [image_digests.default]
@@ -414,6 +415,7 @@ class KojiPromotePlugin(ExitPlugin):
         tag = image.to_str(registry=False)
         for registry in self.workflow.push_conf.docker_registries:
             if tag in registry.digests:
+                # TODO: This will probably not work if push conf stores enclosed image name
                 digests.update(registry.digests[tag])
 
         for version in digests:

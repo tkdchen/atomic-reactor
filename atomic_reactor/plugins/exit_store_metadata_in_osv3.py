@@ -82,6 +82,7 @@ class StoreMetadataInOSv3Plugin(ExitPlugin):
             for image in self.workflow.tag_conf.images:
                 image_str = image.to_str()
                 if image_str in registry.digests:
+                    # TODO: This will probably not work if push conf stores enclosed image name
                     digest = registry.digests[image_str]
                     digests[image.to_str(registry=False)] = digest
 
@@ -110,6 +111,7 @@ class StoreMetadataInOSv3Plugin(ExitPlugin):
             for image in self.workflow.tag_conf.primary_images:
                 registry_image = image.copy()
                 registry_image.registry = registry.uri
+                # TODO: This will probably not work if push conf stores enclosed image name
                 primary_repositories.append(registry_image.to_str())
 
         # unique unpredictable repositories
@@ -118,6 +120,7 @@ class StoreMetadataInOSv3Plugin(ExitPlugin):
             for image in self.workflow.tag_conf.unique_images:
                 registry_image = image.copy()
                 registry_image.registry = registry.uri
+                # TODO: This will probably not work if push conf stores enclosed image name
                 unique_repositories.append(registry_image.to_str())
 
         return {
@@ -132,6 +135,7 @@ class StoreMetadataInOSv3Plugin(ExitPlugin):
             for image in self.workflow.tag_conf.images:
                 image_str = image.to_str()
                 if image_str in digests:
+                    # TODO: This will probably not work if push conf stores enclosed image name
                     digest = digests[image_str]
                     for digest_version in digest.content_type:
                         if digest_version not in digest:

@@ -188,12 +188,13 @@ class PulpRegistry(Registry):
 
 class DockerRegistry(Registry):
     """ v1/v2 docker registry """
-    def __init__(self, uri, insecure=False):
+    def __init__(self, uri, insecure=False, organization=None):
         """
         :param uri: str, uri for pushing/pulling
         :param insecure: bool
         """
         super(DockerRegistry, self).__init__(uri, insecure=insecure)
+        self.organization = organization
         self.digests = {}  # maps a tag (str) to a ManifestDigest instance, if available
         self.config = None  # stores image config from the registry,
         # media type of the config is application/vnd.docker.container.image.v1+json
@@ -210,10 +211,10 @@ class PushConf(object):
             "pulp": {},  # name -> PulpRegistry
         }
 
-    def add_docker_registry(self, registry_uri, insecure=False):
+    def add_docker_registry(self, registry_uri, insecure=False, organization=None):
         if registry_uri is None:
             raise RuntimeError("registry URI cannot be None")
-        r = DockerRegistry(registry_uri, insecure=insecure)
+        r = DockerRegistry(registry_uri, insecure=insecure, organization=organization)
         self._registries["docker"].append(r)
         return r
 
@@ -409,6 +410,22 @@ class DockerBuildWorkflow(object):
     def throw_canceled_build_exception(self, *args, **kwargs):
         self.build_canceled = True
         raise BuildCanceledException("Build was canceled")
+
+    def get_pushed_images_with_digests(self):
+        """
+        Returns a generator of two item tuples containing an ImageName
+        object and the corresponding digest representing all images
+        pushed to all registries
+        """
+        for registry in self.workflow.push_conf.docker_registries:
+            for tag_image in self.workflow.tag_conf.images:
+                image = tag_image.copy()
+                if registry.organization:
+                    image.enclose(registry.organization)
+                image.registry = registry.uri
+                # yield image, registry.digests[tag_image.to_str(registry=False, tag=True)]
+                # TODO: Was it enclosed before added to digests?
+                yield image, registry.digests[image.to_str(registry=False, tag=True)]
 
     def build_docker_image(self):
         """
