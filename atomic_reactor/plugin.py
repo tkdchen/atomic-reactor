@@ -329,8 +329,10 @@ class PluginsRunner(object):
                 break
 
         if len(failed_msgs) == 1:
+            logger.exception('something wrong in plugin, re-raise it.')
             raise PluginFailedException(failed_msgs[0])
         elif len(failed_msgs) > 1:
+            logger.exception('something wrong in plugin, re-raise it.')
             raise PluginFailedException("Multiple plugins raised an exception: " +
                                         str(failed_msgs))
 
