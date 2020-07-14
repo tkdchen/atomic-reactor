@@ -748,6 +748,7 @@ class DockerTasker(CommonTasker):
         """
         logger.info("pushing image '%s'", image)
         logger.debug("image: '%s', insecure: '%s'", image, insecure)
+
         try:
             # push returns string composed of newline separated jsons; exactly what 'docker push'
             # outputs

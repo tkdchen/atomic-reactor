@@ -14,6 +14,8 @@ import time
 import platform
 import random
 
+from docker.errors import APIError
+
 from atomic_reactor.constants import (IMAGE_TYPE_DOCKER_ARCHIVE, IMAGE_TYPE_OCI, IMAGE_TYPE_OCI_TAR,
                                       MEDIA_TYPE_DOCKER_V2_SCHEMA2, DOCKER_PUSH_MAX_RETRIES,
                                       DOCKER_PUSH_BACKOFF_FACTOR)
@@ -201,6 +203,22 @@ class TagAndPushPlugin(PostBuildPlugin):
                         self.push_with_skopeo(registry_image, insecure, docker_push_secret,
                                               source_oci_image_path)
                     else:
+                        # try:
+                        #     self.tasker.tag_and_push_image(self.workflow.builder.image_id,
+                        #                                    registry_image, insecure=insecure,
+                        #                                    force=True, dockercfg=docker_push_secret)
+                        # except APIError as e:
+                        #     if e.response.status_code == 500:
+                        #         # The reason is reword like: Internal Server Error from registry xxx
+                        #         e.response.reason += ' from registry ' + registry
+                        #     raise
+
+                        # class FakeResponse(object):
+                        #     status_code = 500
+                        #     reason = 'Fake Internal Server Error'
+                        #
+                        # raise APIError('fake internal server error', response=FakeResponse())
+
                         self.tasker.tag_and_push_image(self.workflow.builder.image_id,
                                                        registry_image, insecure=insecure,
                                                        force=True, dockercfg=docker_push_secret)
